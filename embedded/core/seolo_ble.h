@@ -1,24 +1,34 @@
-#ifndef SEOLO_BLE_H
-#define SEOLO_BLE_H
+#ifndef SELOO_BLE_H
+#define SELOO_BLE_H
 
 #include <ArduinoBLE.h>
 
-class seolo_ble
-{
+class seolo_ble {
 public:
-    seolo_ble(const char* localName, const char* authCode);
-    void begin();
-    void switchCharacteristicWritten(BLEDevice central, BLECharacteristic characteristic);
-    void blePeripheralConnectHandler(BLEDevice central);
-    void blePeripheralDisconnectHandler(BLEDevice central);
+    // Constructor
+    seolo_ble(const char* deviceName, const char* authenticationCode);
 
-private:
+    // Methods
+    void begin();
+    void poll();
+
+    // Member variables
+    const char* _deviceName;
+    const char* _authenticationCode;
+
+    // Static member variables
+    static const int ledPin;
+    static const char* AUTHENTICATION_CODE;
+
+    // BLE service and characteristic
     BLEService ledService;
     BLECharacteristic stringCharacteristic;
-    String receivedString;
-    const int ledPin = LED_BUILTIN;
-    const char* localName;
-    const char* authCode;
+
+private:
+    // Private methods
+    static void blePeripheralConnectHandler(BLEDevice central);
+    static void blePeripheralDisconnectHandler(BLEDevice central);
+    static void switchCharacteristicWritten(BLEDevice central, BLECharacteristic characteristic);
 };
 
 #endif
