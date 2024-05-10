@@ -2,7 +2,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=java,webstorm,intellij,visualstudiocode,react,flutter,kotlin
 
 ### EMBEDDED
-**/embedded/libraries/
+**/embedded/core/libraries/
 
 ### Django ###
 *.log
