@@ -6,99 +6,104 @@ write value가 utf-8일 때, 회사코드가 같으면 led를 켜고 연결을 �
 #include <ArduinoBLE.h>
 
 #define AUTHENTICATION_CODE "SFY001KOR"
+#define UID "1DA24G10"
 
-BLEService ledService("19B10000-E8F2-537E-4F6C-D104768A1214");                                                      // create service
-BLECharacteristic stringCharacteristic("19B10001-E8F2-537E-4F6C-D104768A1214", BLERead | BLEWrite | BLENotify, 20); // create characteristic for string
+BLEService ledService("19B10000-E8F2-537E-4F6C-D104768A1214");
+BLECharacteristic stringCharacteristic("19B10001-E8F2-537E-4F6C-D104768A1214", BLERead | BLEWrite | BLENotify, 32);
 
-const int ledPin = LED_BUILTIN; // pin to use for the LED
+const int ledPin = LED_BUILTIN;
 
-String receivedString = ""; // variable to store received string
+String receivedString = "";
+bool isFirstConnection = true;
+bool isAuthenticationDone = false;
 
-void setup()
-{
+void setup() {
     Serial.begin(9600);
-    while (!Serial)
-        ;
+    while (!Serial);
 
-    pinMode(ledPin, OUTPUT); // use the LED pin as an output
+    pinMode(ledPin, OUTPUT);
 
-    // begin initialization
-    if (!BLE.begin())
-    {
+    if (!BLE.begin()) {
         Serial.println("starting Bluetooth® Low Energy module failed!");
-        while (1)
-            ;
+        while (1);
     }
 
-    // set the local name peripheral advertises
-    BLE.setLocalName("SSAFY LOCK 2");
-    // set the UUID for the service this peripheral advertises
+    BLE.setLocalName("SSAFY LOCK 1");
     BLE.setAdvertisedService(ledService);
-
-    // add the characteristic to the service
     ledService.addCharacteristic(stringCharacteristic);
-
-    // add service
     BLE.addService(ledService);
 
-    // assign event handlers for connected, disconnected to peripheral
     BLE.setEventHandler(BLEConnected, blePeripheralConnectHandler);
     BLE.setEventHandler(BLEDisconnected, blePeripheralDisconnectHandler);
-
-    // assign event handler for characteristic written
     stringCharacteristic.setEventHandler(BLEWritten, switchCharacteristicWritten);
 
-    // start advertising
     BLE.advertise();
 
-    Serial.println(("SEOLO"));
+    Serial.println("SEOLO");
 }
 
-void loop()
-{
-    // poll for Bluetooth® Low Energy events
+void loop() {
     BLE.poll();
+
+    // AUTHENTICATION_CODE에 따라 연결 처리
+
+    // AUTHENTICATION_CODE가 맞으면 
+    checkCodeAvailable
 }
 
-void switchCharacteristicWritten(BLEDevice central, BLECharacteristic characteristic)
-{
-    // central wrote new value to characteristic, update LED
+void switchCharacteristicWritten(BLEDevice central, BLECharacteristic characteristic) {
     Serial.print("Characteristic event, written: ");
 
-    // Convert the data to a string
     const uint8_t *data = characteristic.value();
     int length = characteristic.valueLength();
-    String receivedString;
+    receivedString = "";
+    int cnt = 0;
 
-    for (int i = 0; i < length; i++)
-    {
+    for (int i = 0; i < length; i++) {
         receivedString += (char)data[i];
     }
 
     Serial.println(receivedString);
 
-    // Process received string here
-    if (receivedString == AUTHENTICATION_CODE)
-    {
+    if (isFirstConnection) {
+        if (receivedString != AUTHENTICATION_CODE) {
+            digitalWrite(ledPin, LOW);
+            central.disconnect();
+            isFirstConnection = true;
+            return;
+        }
+
         digitalWrite(ledPin, HIGH);
-    }
-    else
-    {
-        digitalWrite(ledPin, LOW);
-        central.disconnect();
+        checkCodeAvailable(receivedString);
+        isFirstConnection = false;
+        isAuthenticationDone = true;
+    } else {
+        // 인증 후에는 특정 상태 코드 검증 가능
+        if (isAuthenticationDone) {
+            checkCodeAvailable(receivedString);
+        }
     }
 }
 
-void blePeripheralConnectHandler(BLEDevice central)
-{
-    // central connected event handler
+void blePeripheralConnectHandler(BLEDevice central) {
     Serial.print("Connected event, central: ");
     Serial.println(central.address());
 }
 
-void blePeripheralDisconnectHandler(BLEDevice central)
-{
-    // central disconnected event handler
+void blePeripheralDisconnectHandler(BLEDevice central) {
     Serial.print("Disconnected event, central: ");
     Serial.println(central.address());
+}
+
+// 상태코드 및 인증 코드 검증 함수
+void checkCodeAvailable(String receivedString) {
+    if (receivedString == "INIT") {
+        Serial.println("INIT");
+    } else if (receivedString == "LOCKED") {
+        Serial.println("LOCKED");
+    } else if (receivedString == "LOCK") {
+        Serial.println("LOCK");
+    } else {
+        Serial.println("Unknown code received.");
+    }
 }
