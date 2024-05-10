@@ -3,6 +3,8 @@
 
 ### EMBEDDED
 **/embedded/core/libraries/
+**/embedded/temp_core/temp_nano_esp32/libraries/
+**/embedded/temp_core/temp_nano_iot/libraries/
 
 ### Django ###
 *.log
