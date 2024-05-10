@@ -1,6 +1,9 @@
 # Created by https://www.toptal.com/developers/gitignore/api/java,webstorm,intellij,visualstudiocode,react,flutter,kotlin
 # Edit at https://www.toptal.com/developers/gitignore?templates=java,webstorm,intellij,visualstudiocode,react,flutter,kotlin
 
+### EMBEDDED
+**/embedded/libraries/
+
 ### Django ###
 *.log
 *.pot
