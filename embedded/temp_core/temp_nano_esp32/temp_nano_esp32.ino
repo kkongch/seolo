@@ -1,102 +1,229 @@
-/*
-Arduino NANO 33 ESP32 기준
-write value가 utf-8일 때, 회사코드가 같으면 led를 켜고 연결을 유지하고, 다르면 led를 끄고 연결도 해제는 코드
-
-수정필요함!!!!!!! 작동안함 :(
-*/
-
+#include <sstream>
+#include <vector>
+#include <string>
 #include <BLEDevice.h>
-#include <BLEServer.h>
 #include <BLEUtils.h>
-#include <BLE2902.h>
+#include <BLEServer.h>
 
+std::vector<std::string> splitString(const std::string &s, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
+#define SERVICE_UUID "20240520-C104-C104-C104-012345678910"
+#define CHARACTERISTIC_UUID "20240521-C104-C104-C104-012345678910"
 #define AUTHENTICATION_CODE "SFY001KOR"
-
-BLEServer* pServer;
-BLECharacteristic* pCharacteristic;
-
-const int ledPin = LED_BUILTIN;
+#define UID "1DA24G10"
+String savedToken = "";
+String savedMachine = "";
+BLECharacteristic *pCharacteristic;
+BLEServer *pServer = NULL;
+BLEService *messageService = NULL;
+BLECharacteristic *stringCharacteristic = NULL;
 
 String receivedString = "";
+String companyCode = "";
+String code = "";
+String token = "";
+String machine = "";
+int battery = 0;
 
-class MyServerCallbacks : public BLEServerCallbacks {
+class MyCallbacks: public BLECharacteristicCallbacks {
+public:
+    void onWrite(BLECharacteristic *characteristic) {
+        std::string receivedString = characteristic->getValue();
+        int length = receivedString.length();
+
+        // 데이터가 없을 경우 예외처리
+        if(receivedString.empty()) {
+            Serial.println("Empty data received");
+            return;
+        }
+        
+        // 쉼표로 문자열을 분할
+        std::vector<std::string> tokens = splitString(receivedString, ',');
+
+        // 토큰이 4개 미만인 경우 예외처리
+        if (tokens.size() < 4) {
+            Serial.println("Insufficient data received");
+            return;
+        }
+
+        // 토큰들을 순서대로 할당
+        companyCode = tokens[0].c_str();
+        code = tokens[1].c_str();
+        token = tokens[2].c_str();
+        machine = tokens[3].c_str();
+
+        Serial.println(companyCode.c_str());
+        Serial.println(code.c_str());
+        Serial.println(token.c_str());
+        Serial.println(machine.c_str());
+
+        // 회사 코드가 일치하지 않으면 연결 종료
+        // if (companyCode != AUTHENTICATION_CODE) {
+        //     BLEServer* pServer = characteristic->getServer();
+        //     if (pServer != nullptr) {
+        //         pServer->disconnect(characteristic->getConnectionId());
+        //     }
+        //     return;
+        // }
+
+        checkCodeAvailable(companyCode, code, token, machine);
+    }
+};
+
+class MyServerCallbacks: public BLEServerCallbacks {
+public:
     void onConnect(BLEServer* pServer) {
-      Serial.println("Connected event");
+        int connectedCount = pServer->getConnectedCount() + 1;
+        Serial.print("Connected devices count: ");
+        Serial.println(connectedCount);      
+        pServer->startAdvertising();
     }
 
     void onDisconnect(BLEServer* pServer) {
-      Serial.println("Disconnected event");
+        int connectedCount = pServer->getConnectedCount() - 1;
+        Serial.print("Connected devices count: ");
+        Serial.println(connectedCount);
+        pServer->startAdvertising();
     }
 };
 
-class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) {
-      Serial.println("Characteristic event, written: ");
+MyServerCallbacks serverCallbacks;
 
-      // Convert the data to a string
-      // std::string rxValue = pCharacteristic->getValue();
-     
-     
-      std::string rxValue = pCharacteristic->getValue().c_str();
-      if (rxValue.length() > 0) {
-        for (int i = 0; i < rxValue.length(); i++)
-          receivedString += (char)rxValue[i];
-      }
+void checkCodeAvailable(String companyCode, String code, String token, String machine) {
+    String message = "";
 
-      Serial.println(receivedString);
+    if (companyCode == AUTHENTICATION_CODE) {
+        if (code == "INIT") {
+            if (savedToken != "") {
+                // "CHECK, UID, MachineId, BATTERY" 전송
+                message += "CHECK";
+                message += ",";
+                message += UID;
+                message += ",";
+                message += savedMachine;
+                message += ",";
+            } else {
+                // "WRITE, UID, BATTERY" 전송
+                message += "WRITE";
+                message += ",";
+                message += UID;
+                message += ",";
+                message += ",";
+            }
+        } else if (code == "LOCKED") {
+            if (savedToken == "") {
+                // "ALERT, BATTERY" 전송
+                message += "ALERT";
+                message += ",";
+                message += ",";
+                message += ",";
+            } else if (savedToken == token) {
+                // 자물쇠 여는 로직
+                // "UNLOCK, UID, BATTERY, TOKEN" 전송
+                message += "UNLOCK";
+                message += ",";
+                message += UID;
+                message += ",";
+                message += ",";
+                message += savedToken;
 
-      // Process received string here
-      if (receivedString == AUTHENTICATION_CODE) {
-        digitalWrite(ledPin, HIGH);
-      } else {
-        digitalWrite(ledPin, LOW);
-        pServer->disconnect(pServer->getConnectedHandle());
-      }
+                // 자물쇠 열기
+
+                // 내장된 정보 삭제
+                savedToken = "";
+                savedMachine = "";
+            } else {
+                // "CHECK, UID, machineId, BATTERY" 전송
+                message += "CHECK";
+                message += ",";
+                message += UID;
+                message += ",";
+                message += savedMachine;
+                message += ",";
+            }
+        } else if (code == "LOCK") {
+            if (token != "" && savedToken == "") {
+                // 자물쇠에 정보 저장
+                savedMachine = machine;
+                savedToken = token;
+
+                // 자물쇠 잠금
+
+                // 잠금되면 데이터 전송("LOCKED", "TOKEN", "UID", "BATTERY")
+                message += "LOCKED";
+                message += UID;
+                message += ",";
+                message += ",";
+                message += savedToken;
+            } else if (token == savedToken) {
+                // 자물쇠 잠금
+
+                // 잠금되면 데이터 전송("LOCKED", "TOKEN", "UID", "BATTERY")
+                message += "LOCKED";
+                message += ",";
+                message += UID;
+                message += ",";
+                message += savedMachine;
+                message += ",";
+                message += savedToken;
+            } else {
+                // 로직 없음
+            }
+        }
+    } else {
+        // 블루투스 연결 끊기
+        // pServer->onDisconnect();
     }
-};
+    
+    message += ",";
+    message += battery;
+
+    // message 전송
+    Serial.println(message);
+    stringCharacteristic->setValue(message.c_str());
+}
 
 void setup() {
-  Serial.begin(9600);
-  while (!Serial);
+    Serial.begin(9600);
+    while (!Serial);
 
-  pinMode(ledPin, OUTPUT);
+    BLEDevice::init("SEOLO LOCK 1");
 
-  // Create the BLE Device
-  BLEDevice::init("SSAFY LOCK 1");
+    pServer = BLEDevice::createServer();
+    BLEService *pService = pServer->createService(BLEUUID(SERVICE_UUID));
 
-  // Create the BLE Server
-  pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
+    pCharacteristic = pService->createCharacteristic(
+        BLEUUID(CHARACTERISTIC_UUID),
+        BLECharacteristic::PROPERTY_READ |
+        BLECharacteristic::PROPERTY_WRITE | 
+        BLECharacteristic::PROPERTY_NOTIFY
+    );
 
-  // Create the BLE Service
-  BLEService *pService = pServer->createService("19B10000-E8F2-537E-4F6C-D104768A1214");
+    pCharacteristic->setCallbacks(new MyCallbacks());
 
-  // Create a BLE Characteristic
-  pCharacteristic = pService->createCharacteristic(
-                      "19B10001-E8F2-537E-4F6C-D104768A1214",
-                      BLECharacteristic::PROPERTY_READ |
-                      BLECharacteristic::PROPERTY_WRITE |
-                      BLECharacteristic::PROPERTY_NOTIFY |
-                      BLECharacteristic::PROPERTY_INDICATE
-                    );
+    pService->start();
 
-  // Set the characteristic's value
-  pCharacteristic->setValue("Hello World");
+    BLEAdvertising *pAdvertising = pServer->getAdvertising();
+    pAdvertising->start();
 
-  // Set the characteristic's event handler
-  pCharacteristic->setCallbacks(new MyCharacteristicCallbacks());
+    Serial.println("SEOLO LOCK 1");
 
-  // Start the service
-  pService->start();
+    // stringCharacteristic, battery 초기화
+    stringCharacteristic = pCharacteristic;
+    battery = 0;
 
-  // Start advertising
-  BLEAdvertising *pAdvertising = pServer->getAdvertising();
-  pAdvertising->addServiceUUID(pService->getUUID());
-  pAdvertising->start();
-
-  Serial.println("SEOLO");
+    // 연결 및 연결 해제 이벤트 핸들러 등록
+    pServer->setCallbacks(&serverCallbacks);
 }
 
 void loop() {
-  // Nothing to do here
+    delay(100);
 }
