@@ -86,10 +86,10 @@ void switchCharacteristicWritten(BLEDevice central, BLECharacteristic characteri
     token = (tokens.size() > 2) ? tokens[2].c_str() : "";
     machine = (tokens.size() > 3) ? tokens[3].c_str() : "";
 
-    Serial.println(companyCode);
-    Serial.println(code);
-    Serial.println(token);
-    Serial.println(machine);
+    Serial.println("companyCode: " + companyCode);
+    Serial.println("code: " + code);
+    Serial.println("token: " + token);
+    Serial.println("machine: " + machine);
     
     checkCodeAvailable(companyCode, code, token, machine);
 }
@@ -116,37 +116,23 @@ void checkCodeAvailable(String companyCode, String code, String token, String ma
         if (code == "INIT") {
             if (savedToken != "") {
                 // "CHECK, UID, MachineId, BATTERY" 전송
-                message += "CHECK";
-                message += ",";
-                message += UID;
-                message += ",";
-                message += machine;
-                message += ",";
+                message += "CHECK," + UID + "," + machine + ",";
                 // message += battery;
             } else {
                 // "WRITE, UID, BATTERY" 전송
-                message += "WRITE";
-                message += ",";
-                message += UID;
-                message += ",";
+                message += "WRITE" + "," + UID + ",";
                 // message += battery;
             }
         } else if (code == "LOCKED") {
             if (savedToken == "") {
                 // "ALERT, BATTERY" 전송
-                message += "ALERT";
-                message += ",";
+                message += "ALERT" + ",";
                 // message += battery;
             } else if (savedToken == token) {
                 // 자물쇠 여는 로직
                 // "UNLOCK, UID, BATTERY, TOKEN" 전송
-                message += "UNLOCK";
-                message += ",";
-                message += UID;
-                message += ",";
-                message += battery;
-                message += ",";
-                message += savedToken;
+                message += "UNLOCK" + "," + UID + "," + savedToken + ",";
+                // message += battery;
 
                 // 자물쇠 열기
 
@@ -155,12 +141,7 @@ void checkCodeAvailable(String companyCode, String code, String token, String ma
                 savedMachine = "";
             } else {
                 // "CHECK, UID, machineId, BATTERY" 전송
-                message += "CHECK";
-                message += ",";
-                message += UID;
-                message += ",";
-                message += savedMachine;
-                message += ",";
+                message += "CHECK" + "," + UID + "," + savedMachine + ",";
                 // message += battery;
             }
         } else if (code == "LOCK") {
@@ -172,23 +153,13 @@ void checkCodeAvailable(String companyCode, String code, String token, String ma
                 // 자물쇠 잠금
 
                 // 잠금되면 데이터 전송("LOCKED", "TOKEN", "UID", "BATTERY")
-                message += "LOCKED";
-                message += ",";
-                message += savedToken;
-                message += ",";
-                message += UID;
-                message += ",";
+                message += "LOCKED" + "," + UID + "," + savedToken + ",";
                 // message += battery;
             } else if (token == savedToken) {
                 // 자물쇠 잠금
 
                 // 잠금되면 데이터 전송("LOCKED", "TOKEN", "UID", "BATTERY")
-                message += "LOCKED";
-                message += ",";
-                message += savedToken;
-                message += ",";
-                message += UID;
-                message += ",";
+                message += "LOCKED" + "," + UID + "," + savedToken + ",";
                 // message += battery;
             } else {
                 // 로직 없음
