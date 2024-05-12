@@ -20,22 +20,15 @@ std::vector<std::string> splitString(const std::string &s, char delimiter) {
 }
 
 // 사용되는 변수들 설정
-#define AUTHENTICATION_CODE "SFY001KOR"
-#define UID "1DA24G10"
-String savedToken = "";
-String savedMachine = "";
+const char* AUTHENTICATION_CODE = "SFY001KOR";
+const char* UID = "1DA24G10";
+const int ledPin = LED_BUILTIN;
 
 BLEService messageService("19B10000-E8F2-537E-4F6C-D104768A1214");
 BLECharacteristic stringCharacteristic("19B10001-E8F2-537E-4F6C-D104768A1214", BLERead | BLEWrite | BLENotify, 200);
 
-const int ledPin = LED_BUILTIN;
-
-String receivedString = "";
-String companyCode = "";
-String code = "";
-String token = "";
-String machine = "";
-int battery = 0;
+const char* savedToken = "";
+const char* savedMachine = "";
 
 // 초기 설정
 void setup() {
@@ -45,7 +38,7 @@ void setup() {
     pinMode(ledPin, OUTPUT);
 
     if (!BLE.begin()) {
-        Serial.println("starting Bluetooth® Low Energy module failed!");
+        Serial.println("Bluetooth® Low Energy failed to Start!");
         while (1);
     }
 
@@ -67,7 +60,13 @@ void loop() {
 
     // 계속 찾아지도록 설정
     BLE.advertise();
-    delay(100);
+    Serial.println("started");
+    delay(1000);
+
+    // 배터리 30% 이하이면 LED 켜기
+    // if (battery < 30) {
+
+    // }
 }
 
 // BLE로 값을 입력받았을 경우 설정
@@ -81,58 +80,62 @@ void switchCharacteristicWritten(BLEDevice central, BLECharacteristic characteri
     std::vector<std::string> tokens = splitString(receivedString, ',');
 
     // 토큰들을 순서대로 할당
-    companyCode = (tokens.size() > 0) ? tokens[0].c_str() : "";
-    code = (tokens.size() > 1) ? tokens[1].c_str() : "";
-    token = (tokens.size() > 2) ? tokens[2].c_str() : "";
-    machine = (tokens.size() > 3) ? tokens[3].c_str() : "";
+    const char* companyCode = (tokens.size() > 0) ? tokens[0].c_str() : "";
+    const char* code = (tokens.size() > 1) ? tokens[1].c_str() : "";
+    const char* token = (tokens.size() > 2) ? tokens[2].c_str() : "";
+    const char* machine = (tokens.size() > 3) ? tokens[3].c_str() : "";
 
-    Serial.println("companyCode: " + companyCode);
-    Serial.println("code: " + code);
-    Serial.println("token: " + token);
-    Serial.println("machine: " + machine);
+
+    Serial.print("companyCode");
+    Serial.println(companyCode);
+    Serial.print("code");
+    Serial.println(code);
+    Serial.print("token");
+    Serial.println(token);
+    Serial.print("machine");
+    Serial.println(machine);
     
     checkCodeAvailable(companyCode, code, token, machine);
 }
 
-// BLE연결된 경우
+// BLE 연결된 경우
 void blePeripheralConnectHandler(BLEDevice central) {
-    Serial.print("Connected event, central: ");
+    Serial.print("Connected: ");
     Serial.println(central.address());
 }
 
-// BLE연결 끊길 경우
+// BLE 연결 끊길 경우
 void blePeripheralDisconnectHandler(BLEDevice central) {
-    Serial.print("Disconnected event, central: ");
+    Serial.print("Disconnected: ");
     Serial.println(central.address());
 }
 
-// 상태코드 및 인증 코드 검증 함수
-void checkCodeAvailable(String companyCode, String code, String token, String machine) {
+// 상태 코드 및 인증 코드 검증 함수
+void checkCodeAvailable(const char* companyCode, const char* code, const char* token, const char* machine) {
     String message = "";
-    // 항상 배터리 정보 주기!
-    // int battery = 배터리계산하는함수();
 
-    if (companyCode == AUTHENTICATION_CODE) {
-        if (code == "INIT") {
-            if (savedToken != "") {
-                // "CHECK, UID, MachineId, BATTERY" 전송
-                message += "CHECK," + UID + "," + machine + ",";
-                // message += battery;
+    if (strcmp(companyCode, AUTHENTICATION_CODE) == 0) {
+        if (strcmp(code, "INIT") == 0) {
+            if (strcmp(savedToken, "") != 0) {
+                message += "CHECK";
+                message += ",";
+                message += UID;
+                message += ",";
+                message += machine;
             } else {
-                // "WRITE, UID, BATTERY" 전송
-                message += "WRITE" + "," + UID + ",";
-                // message += battery;
+                message += "WRITE";
+                message += ",";
+                message += UID;
             }
-        } else if (code == "LOCKED") {
-            if (savedToken == "") {
-                // "ALERT, BATTERY" 전송
-                message += "ALERT" + ",";
-                // message += battery;
-            } else if (savedToken == token) {
-                // 자물쇠 여는 로직
-                // "UNLOCK, UID, BATTERY, TOKEN" 전송
-                message += "UNLOCK" + "," + UID + "," + savedToken + ",";
-                // message += battery;
+        } else if (strcmp(code, "LOCKED") == 0) {
+            if (strcmp(savedToken, "") == 0) {
+                message += "ALERT";
+            } else if (strcmp(savedToken, token) == 0) {
+                message += "UNLOCK";
+                message += ",";
+                message += UID;
+                message += ",";
+                message += savedToken;
 
                 // 자물쇠 열기
 
@@ -140,37 +143,43 @@ void checkCodeAvailable(String companyCode, String code, String token, String ma
                 savedToken = "";
                 savedMachine = "";
             } else {
-                // "CHECK, UID, machineId, BATTERY" 전송
-                message += "CHECK" + "," + UID + "," + savedMachine + ",";
-                // message += battery;
+                message += "CHECK";
+                message += ",";
+                message += UID;
+                message += ",";
+                message += savedMachine;
             }
-        } else if (code == "LOCK") {
-            if (token != "" && savedToken == "") {
+        } else if (strcmp(code, "LOCK") == 0) {
+            if (strcmp(token, "") != 0 && strcmp(savedToken, "") == 0) {
                 // 자물쇠에 정보 저장
                 savedMachine = machine;
                 savedToken = token;
 
                 // 자물쇠 잠금
 
-                // 잠금되면 데이터 전송("LOCKED", "TOKEN", "UID", "BATTERY")
-                message += "LOCKED" + "," + UID + "," + savedToken + ",";
-                // message += battery;
-            } else if (token == savedToken) {
+                message += "LOCKED";
+                message += ",";
+                message += UID;
+                message += ",";
+                message += savedToken;
+            } else if (strcmp(token, savedToken) == 0) {
                 // 자물쇠 잠금
 
-                // 잠금되면 데이터 전송("LOCKED", "TOKEN", "UID", "BATTERY")
-                message += "LOCKED" + "," + UID + "," + savedToken + ",";
-                // message += battery;
+                message += "LOCKED";
+                message += ",";
+                message += UID;
+                message += ",";
+                message += savedToken;
             } else {
-                // 로직 없음
-                // message += battery;
+                message += "NOTOKENSENT";
             }
         }
     } else {
-        // 블루투스 연결 끊기
         BLE.disconnect();
     }
 
-    // message 전송
+    message += ",";
+    // battery = 배터리계산하는 함수();
+    // message += battery;
     stringCharacteristic.writeValue(message.c_str());
 }
